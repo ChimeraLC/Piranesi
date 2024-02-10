@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Include folder
+include/glm/
+include/KHR/
+.vscode/
+MakefileOld
