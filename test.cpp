@@ -5,12 +5,11 @@
 #include <GLFW/glfw3.h>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "shader_s.h"
+#include "shaders/shader_s.h"
 #include "camera.h"
 
 typedef struct {
@@ -23,6 +22,7 @@ typedef struct {
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn);
 void handleInput(GLFWwindow *window, float delta);
+int bind_texture(char* textureFilename, int glTexture);
 Image readBMP(char* filename);
 
 //  Window Settings
@@ -41,6 +41,7 @@ const float GROUND_SCALE = 400.0f;
 const int PILLAR_SPACING = 8.0f;
 const int PILLAR_COUNT = 25;
 const float PILLAR_HEIGHT = 20.0f;
+const glm::vec3 LIGHT_SOURCE = glm::vec3(0.0f, 200.0f, 0.0f);
 
 using namespace std;
 
@@ -78,80 +79,81 @@ int main() {
     } 
 
     /* Building and compiling shaders */
-    Shader mainShader("shader.vs", "shader.fs");
+    Shader mainShader("shaders/shader.vs", "shaders/shader.fs");
+    Shader lightShader("shaders/lightshader.vs", "shaders/lightshader.fs");
 
     /* Enable vertex depth */
     glEnable(GL_DEPTH_TEST);  
 
-    /* Vertex data for a cube */
+    /* Vertex data for cubes */
     float cubeVertices[] = {
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, PILLAR_HEIGHT,
-         0.5f,  0.5f, -0.5f,  1.0f, PILLAR_HEIGHT,
-        -0.5f,  0.5f, -0.5f,  0.0f, PILLAR_HEIGHT,
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+        -0.5f, -0.5f, -0.5f,  
+         0.5f, -0.5f, -0.5f,  
+         0.5f, -0.5f,  0.5f,  
+        -0.5f, -0.5f,  0.5f,  
 
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, PILLAR_HEIGHT,
-         0.5f,  0.5f,  0.5f,  1.0f, PILLAR_HEIGHT,
-        -0.5f,  0.5f,  0.5f,  0.0f, PILLAR_HEIGHT,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-
-        -0.5f,  0.5f,  0.5f,  PILLAR_HEIGHT, 0.0f,
-        -0.5f,  0.5f, -0.5f,  PILLAR_HEIGHT, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  PILLAR_HEIGHT, 0.0f,
-
-         0.5f,  0.5f,  0.5f,  PILLAR_HEIGHT, 0.0f,
-         0.5f,  0.5f, -0.5f,  PILLAR_HEIGHT, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  PILLAR_HEIGHT, 0.0f,
-
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
+        -0.5f,  0.5f, -0.5f,  
+         0.5f,  0.5f, -0.5f, 
+         0.5f,  0.5f,  0.5f,  
+        -0.5f,  0.5f,  0.5f,  
     };
-    /* Corresponding indices for the cube */
+
+    /* Vertex data for pillars */
+    float pillarVertices[] = {
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+         0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, PILLAR_HEIGHT, 0.0f, 0.0f, -1.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f, PILLAR_HEIGHT, 0.0f, 0.0f, -1.0f,
+
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, PILLAR_HEIGHT, 0.0f, 0.0f, 1.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f, PILLAR_HEIGHT, 0.0f, 0.0f, 1.0f,
+
+        -0.5f,  0.5f,  0.5f,  0.0f, PILLAR_HEIGHT, -1.0f, 0.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  1.0f, PILLAR_HEIGHT, -1.0f, 0.0f, 0.0f,
+        -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, -1.0f, 0.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f, -1.0f, 0.0f, 0.0f,
+
+         0.5f,  0.5f,  0.5f,  0.0f, PILLAR_HEIGHT, 1.0f, 0.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, PILLAR_HEIGHT, 1.0f, 0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+    };
+
+    /* Indice data for cube */
     unsigned int cubeIndices[] = {
         0, 1, 2,
-        3, 4, 5,
-        6, 7, 8,
-        9, 10, 11,
-        12, 13, 14,
-        15, 16, 17,
-        18, 19, 20,
-        21, 22, 23,
-        24, 25, 26,
-        27, 28, 29,
-        30, 31, 32,
-        33, 34, 35,
+        0, 2, 3,
+        0, 1, 5,
+        0, 4, 5,
+        1, 2, 6,
+        1, 5, 6,
+        2, 3, 7,
+        2, 6, 7,
+        3, 0, 4,
+        3, 7, 4,
+        4, 5, 6,
+        4, 6, 7,
+    };
+
+    /* Incide data for pillar */
+    unsigned int pillarIndices[] = {
+        0, 1, 2, 0, 2, 3,
+        4, 5, 6, 4, 6, 7,
+        8, 9, 10, 8, 10, 11,
+        12, 13, 14, 12, 14, 15,
     };
 
     /* Positions of all cubes */
-    glm::vec3 cubePositions[PILLAR_COUNT * PILLAR_COUNT];
+    glm::vec3 pillarPositions[PILLAR_COUNT * PILLAR_COUNT];
 
     /* Vertex data for ground */
     float groundVertices[] = {
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  GROUND_SCALE, 0.0f,
-         0.5f, -0.5f, 0.5f,   GROUND_SCALE, GROUND_SCALE,
-        -0.5f, -0.5f, 0.5f,   0.0f, GROUND_SCALE,
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  GROUND_SCALE, 0.0f, 0.0f, 1.0f, 0.0f,
+         0.5f, -0.5f, 0.5f,   GROUND_SCALE, GROUND_SCALE, 0.0f, 1.0f, 0.0f,
+        -0.5f, -0.5f, 0.5f,   0.0f, GROUND_SCALE, 0.0f, 1.0f, 0.0f,
     };
 
     /* Indices for ground */
@@ -161,10 +163,10 @@ int main() {
     };
 
     /* Vertex array and buffer objects, alongside element buffer objects. */
-    unsigned int VBO[2], VAO[2], EBO[2];
-    glGenVertexArrays(2, VAO);
-    glGenBuffers(2, VBO);
-    glGenBuffers(2, EBO);
+    unsigned int VBO[3], VAO[3], EBO[3];
+    glGenVertexArrays(3, VAO);
+    glGenBuffers(3, VBO);
+    glGenBuffers(3, EBO);
 
 
     /* Binding VAO used for the ground */
@@ -178,14 +180,18 @@ int main() {
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(groundIndices), groundIndices, GL_STATIC_DRAW);
 
     // Getting position vectors
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
     // Getting texture vectors
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    /* Binding VAO used for objects */
+    // Getting normal vectors 
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    /* Binding VAO used for the light source */
     glBindVertexArray(VAO[1]);
 
     /* Configuring vertex and indice data */
@@ -196,42 +202,36 @@ int main() {
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
 
     // Getting position vectors
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    /* Binding VAO used for pillars */
+    glBindVertexArray(VAO[2]);
+
+    /* Configuring vertex and indice data */
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(pillarVertices), pillarVertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[2]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(pillarIndices), pillarIndices, GL_STATIC_DRAW);
+
+    // Getting position vectors
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
     // Getting texture vectors
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
+    // Getting normal vectors 
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
+    glEnableVertexAttribArray(2);
 
-    /* Generate texture */
-    unsigned int texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    /* Set texture wrapping */
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    /* Generate texture for ground */
+    bind_texture((char *)"textures/ground_texture.bmp", GL_TEXTURE0);
 
-    /* Load textures */
-    char *textureFilename = (char *)"textures/dirt_texture.bmp";
-    Image image = readBMP(textureFilename);
-    int width = image.width;
-    int height = image.height;
-    unsigned char *data = image.data;
-
-    /* If succesfully loaded */
-    if (data) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    }
-    else {
-        std::cout << "Error when loading texture data" << std::endl;
-    }
-
-    /* Free texture data */
-    stbi_image_free(data);   
+    /* Generate texture for the pillars */
+    bind_texture((char *)"textures/wood_texture.bmp", GL_TEXTURE1);
 
     /* Timing of frames */
     float delta = 0.0f;
@@ -257,12 +257,6 @@ int main() {
             glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            /* Bind Texture */
-            glBindTexture(GL_TEXTURE_2D, texture);
-
-            /* Use main shader */
-            mainShader.use();
-
             /* Create transformations */
             glm::mat4 model = glm::mat4(1.0f);
             glm::mat4 view = camera.GetViewMatrix();
@@ -273,14 +267,45 @@ int main() {
             unsigned int modelLoc = glGetUniformLocation(mainShader.ID, "model");
             unsigned int viewLoc  = glGetUniformLocation(mainShader.ID, "view");
             unsigned int projLoc  = glGetUniformLocation(mainShader.ID, "projection");
-            // Pass view and projection data to the shaders
-            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &view[0][0]);
+            unsigned int lightColorLoc  = glGetUniformLocation(mainShader.ID, "lightColor");
+            //unsigned int lightSourceLoc  = glGetUniformLocation(mainShader.ID, "lightSource");
+            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+            glUniform3f(lightColorLoc, 1.0f, 1.0f, 1.0f);
+            mainShader.setVec3("viewSource", camera.Position);
+            mainShader.setVec3("lightSource", LIGHT_SOURCE); // TODO: why doesn't other way work?
+
+            /* Use light shader */
+            lightShader.use();
+
+            /* Bind VAO used for the light source */
+            glBindVertexArray(VAO[1]);
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(0.0f, 50.0f, 0.0f));
+            glm::vec3 cameraPosition = camera.GetPosition();
+            cameraPosition.x *= 17.5f/20.0f;
+            cameraPosition.z *= 17.5f/20.0f;
+            cameraPosition.y = 0;
+            model = glm::translate(model, cameraPosition);
+            model = glm::scale(model, glm::vec3(5.0f, 5.0f, 5.0f));
+            lightShader.setMat4("projection", projection);
+            lightShader.setMat4("view", view);
+            lightShader.setMat4("model", model);
+
+            /* Draw triangle*/
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+
+            /* Use main shader */
+            mainShader.use();
 
             /* Bind VAO used for the ground*/
             glBindVertexArray(VAO[0]);
 
+            /* Set active texture for ground */
+            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 0);
+
             /* Always center ground righ below camera */
+            model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, -2.0f, 0.0f));
             float cameraGridX;
             float cameraGridZ;
@@ -304,20 +329,24 @@ int main() {
             cameraGridZ -= PILLAR_SPACING * PILLAR_COUNT / 2;
             for (unsigned int i = 0; i < PILLAR_COUNT; i++) {
                 for (unsigned int j = 0; j < PILLAR_COUNT; j++) {
-                    cubePositions[PILLAR_COUNT * i + j] = 
+                    pillarPositions[PILLAR_COUNT * i + j] = 
                         glm::vec3(cameraGridX + PILLAR_SPACING * i, -2.0f, cameraGridZ + PILLAR_SPACING * j);
                 }
             }
 
             /* Bind VAO used for objects */
-            glBindVertexArray(VAO[1]); 
+            glBindVertexArray(VAO[2]); 
+
+            /* Set active texture for pillars */
+            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 1);
+
             /* Draw each cube */
-            for (unsigned int i = 0; i < sizeof(cubePositions) / sizeof(cubePositions[0]); i++) {
+            for (unsigned int i = 0; i < sizeof(pillarPositions) / sizeof(pillarPositions[0]); i++) {
                 /* Generate model transformations */
                 glm::mat4 model = glm::mat4(1.0f);
 
                 /* Translate to cube location*/
-                model = glm::translate(model, cubePositions[i]);
+                model = glm::translate(model, pillarPositions[i]);
                 model = glm::translate(model, glm::vec3(0.0f, PILLAR_HEIGHT / 2 - 1.0f, 0.0f));
                 model = glm::scale(model, glm::vec3(1.0f, PILLAR_HEIGHT, 1.0f));
                 
@@ -379,8 +408,8 @@ void handleInput(GLFWwindow *window, float delta)
     }
 
     /* Sprinting */
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT)) {
-        move_inputs *= 2;
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
+        move_inputs *= 3;
     }
     camera.ProcessInputs(move_inputs, delta);
 }
@@ -468,4 +497,45 @@ Image readBMP(char* filename)
     image.data = data;
 
     return image;
+}
+
+/* 
+ *  Requires:
+ *      This provided filename should be a valid bmp file and glTexture an integer
+ *      corresponding to a gl texture.
+ * 
+ *  Effects:
+ *      Reads the bmp file binds it to the given gl texture.
+ */
+int bind_texture(char* textureFilename, int glTexture)
+{
+    unsigned int texture_ground;
+    glGenTextures(1, &texture_ground);
+    glActiveTexture(glTexture);
+    glBindTexture(GL_TEXTURE_2D, texture_ground);
+    /* Set texture wrapping */
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    /* Load textures */
+    Image image = readBMP(textureFilename);
+    int width = image.width;
+    int height = image.height;
+    unsigned char *data = image.data;
+
+    std::cout << "Reading texture with width " << width << " and height " << height << std::endl;
+
+    /* If succesfully loaded */
+    if (data) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else {
+        std::cout << "Error when loading texture data" << std::endl;
+        return -1;
+    }
+    delete[] data;
+    return 0;
 }
