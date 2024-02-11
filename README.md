@@ -4,6 +4,6 @@ Controls:
 WASD to move, Shift to sprint, Cursor to look around
 
 Requirements:
-OpenGL
-GLFW
+OpenGL,
+GLFW,
 GLM
