@@ -412,7 +412,7 @@ void handleInput(GLFWwindow *window, float delta)
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
         move_inputs *= 3;
     }
-    camera.ProcessInputs(move_inputs, delta);
+    camera.ProcessInputs(move_inputs);
 }
 
 /* 

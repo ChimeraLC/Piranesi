@@ -88,11 +88,36 @@ class Camera
         }
 
         /* Moves the camera based on inputs*/
-        void ProcessInputs(glm::vec2 inputs)
+        void ProcessInputs(glm::vec2 inputs, glm::vec3 *pillarPositions, unsigned int pillarInstances, float pillarWidth)
         {
             float velocity = SPEED;
             Position += FrontMove * inputs.y * velocity;
             Position += RightMove * inputs.x * velocity;
+            glm::vec3 pillarPosition;
+            float pillarBuffer = pillarWidth / 2 + 1;
+            /* Check for collisions TODO: BETTER COLLISION DETECTION */
+            for (unsigned int i = 0; i < pillarInstances; i++) {
+                pillarPosition = pillarPositions[i];
+                if (Position.x > pillarPosition.x - pillarBuffer &&
+                    Position.x < pillarPosition.x + pillarBuffer && 
+                    Position.z > pillarPosition.z - pillarBuffer &&
+                    Position.z < pillarPosition.z + pillarBuffer)
+                {
+                    /* Reposition */
+                    if (Position.x > pillarPosition.x - pillarBuffer) {
+                        Position.x = pillarPosition.x - pillarBuffer - 0.1f;
+                    }
+                    else if (Position.x < pillarPosition.x + pillarBuffer) {
+                        Position.x = pillarPosition.x + pillarBuffer + 0.1f;
+                    }
+                    else if (Position.z > pillarPosition.z - pillarBuffer) {
+                        Position.z = pillarPosition.z - pillarBuffer - 0.1f;
+                    }
+                    else if (Position.z < pillarPosition.z + pillarBuffer) {
+                        Position.z = pillarPosition.z + pillarBuffer + 0.1f;
+                    }
+                }
+            }
         }
         
     private:
