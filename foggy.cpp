@@ -41,6 +41,8 @@ const int PILLAR_SPACING = 8.0f;
 const int PILLAR_WIDTH = 5.0f;
 const int PILLAR_COUNT = 25;
 const float PILLAR_HEIGHT = 60.0f;
+const float CUBE_SCALE = 40.0f;
+const float CUBE_HEIGHT = 3.0f;
 const glm::vec3 FOG_COLOR = glm::vec3(0.7f, 0.7f, 0.7f);
 
 using namespace std;
@@ -84,18 +86,37 @@ int main() {
     /* Enable vertex depth */
     glEnable(GL_DEPTH_TEST);  
 
-    /* Vertex data for cubes
+    /* Vertex data for cubes */
     float cubeVertices[] = {
-        -0.5f, -0.5f, -0.5f,  
-         0.5f, -0.5f, -0.5f,  
-         0.5f, -0.5f,  0.5f,  
-        -0.5f, -0.5f,  0.5f,  
+        /* Bottom side */
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  CUBE_SCALE, 0.0f,
+         0.5f, -0.5f,  0.5f,  CUBE_SCALE, CUBE_SCALE,
+        -0.5f, -0.5f,  0.5f,  0.0f, CUBE_SCALE,
 
-        -0.5f,  0.5f, -0.5f,  
-         0.5f,  0.5f, -0.5f, 
-         0.5f,  0.5f,  0.5f,  
-        -0.5f,  0.5f,  0.5f,  
-    }; */
+        /* Vertical sides */
+         0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, CUBE_SCALE,
+         0.5f,  0.5f,  0.5f,  CUBE_SCALE, CUBE_SCALE,
+         0.5f,  0.5f, -0.5f,  0.0f, CUBE_SCALE,
+         
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, CUBE_SCALE,
+        -0.5f,  0.5f,  0.5f,  CUBE_SCALE, CUBE_SCALE,
+        -0.5f,  0.5f, -0.5f,  0.0f, CUBE_SCALE,
+
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, CUBE_SCALE,
+         0.5f,  0.5f,  0.5f,  CUBE_SCALE, CUBE_SCALE,
+        -0.5f,  0.5f,  0.5f,  0.0f, CUBE_SCALE,
+         
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, CUBE_SCALE,
+         0.5f,  0.5f, -0.5f,  CUBE_SCALE, CUBE_SCALE,
+        -0.5f,  0.5f, -0.5f,  0.0f, CUBE_SCALE,
+        
+        /* Top side is invisible */
+    };
 
     /* Vertex data for pillars */
     float pillarVertices[] = {
@@ -120,19 +141,19 @@ int main() {
          0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
     };
 
-    /* Indice data for cube 
+    /* Indice data for cube */
     unsigned int cubeIndices[] = {
         0, 1, 2,
         0, 2, 3,
-        0, 1, 5,
-        0, 4, 5,
-        1, 2, 6,
-        1, 5, 6,
-        2, 3, 7,
-        2, 6, 7,
-        3, 0, 4,
-        3, 7, 4,
-    }; */
+        4, 5, 6,
+        4, 6, 7,
+        8, 9, 10,
+        8, 10, 11,
+        12, 13, 14,
+        12, 14, 15,
+        16, 17, 18,
+        16, 18, 19,
+    }; 
 
     /* Incide data for pillar */
     unsigned int pillarIndices[] = {
@@ -163,10 +184,10 @@ int main() {
     unsigned int pillarInstances = 0; 
 
     /* Vertex array and buffer objects, alongside element buffer objects. */
-    unsigned int VBO[2], VAO[2], EBO[2];
-    glGenVertexArrays(2, VAO);
-    glGenBuffers(2, VBO);
-    glGenBuffers(2, EBO);
+    unsigned int VBO[3], VAO[3], EBO[3];
+    glGenVertexArrays(3, VAO);
+    glGenBuffers(3, VBO);
+    glGenBuffers(3, EBO);
 
 
     /* Binding VAO used for the ground */
@@ -213,16 +234,42 @@ int main() {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
-    /* Configuring shadows with these values */
-    /* Generate texture for ground */
+    /* Binding VAO used for cubes */
+    glBindVertexArray(VAO[2]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[2]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
+
+    // Getting position vectors
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Getting texture vectors
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // Getting normal vectors 
+    //glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
+    //glEnableVertexAttribArray(2);
+
+    /* Configuring shader textures */
     mainShader.use();
+
+    /* Generate texture for ground */
     bind_texture((char *)"textures/ground_texture.bmp", GL_TEXTURE0);
 
     /* Generate texture for the pillars */
     bind_texture((char *)"textures/wood_texture.bmp", GL_TEXTURE1);
 
-    /* Fog color */
+    /* Generate texture for the cubes */
+    bind_texture((char *)"textures/stone_texture.bmp", GL_TEXTURE2);
+
+    /* Fog color and other values */
     mainShader.setVec3("fogColor", FOG_COLOR);
+    mainShader.setFloat("cubeSize", CUBE_SCALE);
+    mainShader.setFloat("cubeHeight", CUBE_HEIGHT);
 
     /* Timing of frames */
     float delta = 0.0f;
@@ -245,8 +292,8 @@ int main() {
             handleInput(window, delta, pillarPositions, pillarInstances);
 
             /* Calculate camera grid */
-            float cameraGridX, cameraSnapX;
-            float cameraGridZ, cameraSnapZ;
+            float cameraGridX, cameraSnapX, cameraCubeSnapX;
+            float cameraGridZ, cameraSnapZ, cameraCubeSnapZ;
             /* Snap ground position to grid */
             cameraSnapX = (int) camera.GetPosition().x;
             cameraSnapZ = (int) camera.GetPosition().z;
@@ -295,11 +342,40 @@ int main() {
             glUniform1f(lightIntensityLoc, 0.9f);
             mainShader.setVec3("viewSource", camera.Position);
 
-            /* Draw triangle*/
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-
             /* Use main shader */
             mainShader.use();
+
+            /* Bind VAO used for the cubes */
+            glBindVertexArray(VAO[2]);
+
+            /* Set active texture for ground */
+            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 2);
+
+            /* Find nearest large block */
+            cameraCubeSnapX = (int) camera.GetPosition().x;
+            cameraCubeSnapZ = (int) camera.GetPosition().z;
+
+            /* Calculate closest grid positions and place cubes there */
+            cameraCubeSnapX = cameraCubeSnapX - remainder(cameraCubeSnapX, 200);
+            cameraCubeSnapZ = cameraCubeSnapZ - remainder(cameraCubeSnapZ, 200);
+
+            /* Always center ground righ below camera */
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(0.0f, CUBE_SCALE / 2 + 3.0f, 0.0f));
+            /* Translate with time */
+            model = glm::translate(model, glm::vec3(fmod((float) glfwGetTime() + 50, 200.0f) - 100 + cameraCubeSnapX, 0.0f, cameraCubeSnapZ));
+            
+            /* Resize*/ 
+            model = glm::scale(model, glm::vec3(CUBE_SCALE, CUBE_SCALE, CUBE_SCALE));
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+            /* Draw triangle*/
+            glDrawElements(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0);
+
+            /* Store cube data into shaders */
+            mainShader.setVec3("cubePos", 
+                glm::vec3(fmod((float) glfwGetTime() + 50, 200.0f) - 100 + cameraCubeSnapX, 0.0f, cameraCubeSnapZ));
+            
 
             /* Bind VAO used for objects */
             glBindVertexArray(VAO[1]); 
@@ -341,7 +417,7 @@ int main() {
 
             /* Draw triangle*/
             glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
-            
+
             /* Swap buffers and poll events */
             glfwSwapBuffers(window);
             glfwPollEvents();
@@ -349,9 +425,9 @@ int main() {
     }
 
     /* Deallocate resources */
-    glDeleteVertexArrays(2, VAO);
-    glDeleteBuffers(2, VBO);
-    glDeleteBuffers(2, EBO);
+    glDeleteVertexArrays(3, VAO);
+    glDeleteBuffers(3, VBO);
+    glDeleteBuffers(3, EBO);
     
     /* Terminate glfw */
     glfwTerminate();
@@ -467,9 +543,13 @@ Image readBMP(char* filename)
     unsigned char header[54];
     fread(header, sizeof(unsigned char), 54, f);
 
-    /* Get height and width info */
+    /* Get height, width, and offset info */
     int width = *(int*) &header[18];
     int height = *(int*) &header[22];
+    int offset = *(int *) &header[10];
+
+    /* Going to beginning of pixel data */
+    fseek(f, offset, SEEK_SET);
 
     /* Create corresponding image size*/
     unsigned char* data = (unsigned char*) calloc(3 * width * height, sizeof(unsigned char));
