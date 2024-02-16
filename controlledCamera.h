@@ -103,18 +103,39 @@ class Camera
                     Position.z > pillarPosition.z - pillarBuffer &&
                     Position.z < pillarPosition.z + pillarBuffer)
                 {
+                    /* Finding nearest edge of object */
+                    int direction = 0;
+                    float closestSide = Position.x - (pillarPosition.x - pillarBuffer);
+
+                    if (Position.z + pillarBuffer - pillarPosition.z < closestSide) {
+                        direction = 1;
+                        closestSide = Position.z - (pillarPosition.z - pillarBuffer);
+                    }
+
+                    if (pillarPosition.x + pillarBuffer - Position.x < closestSide) {
+                        direction = 2;
+                        closestSide = pillarPosition.x + pillarBuffer - Position.x;
+                    }
+
+                    if (pillarPosition.z + pillarBuffer - Position.z < closestSide) {
+                        direction = 3;
+                        closestSide = pillarPosition.z + pillarBuffer - Position.z; // Unecessary
+                    }
+
                     /* Reposition */
-                    if (Position.x > pillarPosition.x - pillarBuffer) {
+                    switch (direction) {
+                        case 0:
                         Position.x = pillarPosition.x - pillarBuffer - 0.1f;
-                    }
-                    else if (Position.x < pillarPosition.x + pillarBuffer) {
+                        break;
+                        case 2:
                         Position.x = pillarPosition.x + pillarBuffer + 0.1f;
-                    }
-                    else if (Position.z > pillarPosition.z - pillarBuffer) {
+                        break;
+                        case 1:
                         Position.z = pillarPosition.z - pillarBuffer - 0.1f;
-                    }
-                    else if (Position.z < pillarPosition.z + pillarBuffer) {
+                        break;
+                        case 3:
                         Position.z = pillarPosition.z + pillarBuffer + 0.1f;
+                        break;
                     }
                 }
             }
