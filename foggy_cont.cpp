@@ -38,12 +38,12 @@ bool mouseFound = false; // If the mouse has been moved yet
 const float FPS = 30.0f;
 const float GROUND_SCALE = 400.0f;
 const int PILLAR_SPACING = 8.0f;
-const int PILLAR_WIDTH = 5.0f;
+const int PILLAR_WIDTH = 3.0f;
 const int PILLAR_COUNT = 25;
 const float PILLAR_HEIGHT = 60.0f;
-const float CUBE_SCALE = 40.0f;
-const float CUBE_HEIGHT = 3.0f;
-const glm::vec3 FOG_COLOR = glm::vec3(0.7f, 0.7f, 0.7f);
+const glm::vec3 FOG_COLOR = glm::vec3(0.06f, 0.06f, 0.06f);
+const float FLASHLIGHT_RADIUS = glm::cos(glm::radians(15.0f));
+const float FLASHLIGHT_RADIUS_OUTER = glm::cos(glm::radians(22.5f));
 
 using namespace std;
 
@@ -81,42 +81,10 @@ int main() {
     } 
 
     /* Building and compiling shaders */
-    Shader mainShader("shaders/fogshader.vs", "shaders/fogshadercube.fs");
+    Shader mainShader("shaders/darkshader.vs", "shaders/darkshader.fs");
 
     /* Enable vertex depth */
     glEnable(GL_DEPTH_TEST);  
-
-    /* Vertex data for cubes */
-    float cubeVertices[] = {
-        /* Bottom side */
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  CUBE_SCALE, 0.0f,
-         0.5f, -0.5f,  0.5f,  CUBE_SCALE, CUBE_SCALE,
-        -0.5f, -0.5f,  0.5f,  0.0f, CUBE_SCALE,
-
-        /* Vertical sides */
-         0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, CUBE_SCALE,
-         0.5f,  0.5f,  0.5f,  CUBE_SCALE, CUBE_SCALE,
-         0.5f,  0.5f, -0.5f,  0.0f, CUBE_SCALE,
-         
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, CUBE_SCALE,
-        -0.5f,  0.5f,  0.5f,  CUBE_SCALE, CUBE_SCALE,
-        -0.5f,  0.5f, -0.5f,  0.0f, CUBE_SCALE,
-
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, CUBE_SCALE,
-         0.5f,  0.5f,  0.5f,  CUBE_SCALE, CUBE_SCALE,
-        -0.5f,  0.5f,  0.5f,  0.0f, CUBE_SCALE,
-         
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, CUBE_SCALE,
-         0.5f,  0.5f, -0.5f,  CUBE_SCALE, CUBE_SCALE,
-        -0.5f,  0.5f, -0.5f,  0.0f, CUBE_SCALE,
-        
-        /* Top side is invisible */
-    };
 
     /* Vertex data for pillars */
     float pillarVertices[] = {
@@ -140,20 +108,6 @@ int main() {
          0.5f, -0.5f, -0.5f,  PILLAR_WIDTH, 1.0f, 1.0f, 0.0f, 0.0f,
          0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
     };
-
-    /* Indice data for cube */
-    unsigned int cubeIndices[] = {
-        0, 1, 2,
-        0, 2, 3,
-        4, 5, 6,
-        4, 6, 7,
-        8, 9, 10,
-        8, 10, 11,
-        12, 13, 14,
-        12, 14, 15,
-        16, 17, 18,
-        16, 18, 19,
-    }; 
 
     /* Incide data for pillar */
     unsigned int pillarIndices[] = {
@@ -234,26 +188,6 @@ int main() {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
-    /* Binding VAO used for cubes */
-    glBindVertexArray(VAO[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
-
-    // Getting position vectors
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // Getting texture vectors
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    // Getting normal vectors 
-    //glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
-    //glEnableVertexAttribArray(2);
-
     /* Configuring shader textures */
     mainShader.use();
 
@@ -268,8 +202,8 @@ int main() {
 
     /* Fog color and other values */
     mainShader.setVec3("fogColor", FOG_COLOR);
-    mainShader.setFloat("cubeSize", CUBE_SCALE);
-    mainShader.setFloat("cubeHeight", CUBE_HEIGHT);
+    mainShader.setFloat("viewRadius", FLASHLIGHT_RADIUS);
+    mainShader.setFloat("viewRadiusOuter", FLASHLIGHT_RADIUS_OUTER);
 
     /* Timing of frames */
     float delta = 0.0f;
@@ -292,8 +226,8 @@ int main() {
             handleInput(window, delta, pillarPositions, pillarInstances);
 
             /* Calculate camera grid */
-            float cameraGridX, cameraSnapX, cameraCubeSnapX;
-            float cameraGridZ, cameraSnapZ, cameraCubeSnapZ;
+            float cameraGridX, cameraSnapX;
+            float cameraGridZ, cameraSnapZ;
             /* Snap ground position to grid */
             cameraSnapX = (int) camera.GetPosition().x;
             cameraSnapZ = (int) camera.GetPosition().z;
@@ -313,11 +247,9 @@ int main() {
                     /* Only draw ocasional pillars*/
                     pillarX = cameraGridX + PILLAR_SPACING * i;
                     pillarY = cameraGridZ + PILLAR_SPACING * j;
-                    if ((int)(pillarX * 5 + pillarY * 3) % 37 == 0) {
-                        pillarPositions[pillarInstances] = 
-                            glm::vec3(pillarX, -2.0f, pillarY);
-                        pillarInstances += 1;
-                    }
+                    pillarPositions[pillarInstances] = 
+                        glm::vec3(pillarX, -2.0f, pillarY);
+                    pillarInstances += 1;
                 }
             }
 
@@ -341,41 +273,10 @@ int main() {
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
             glUniform1f(lightIntensityLoc, 0.9f);
             mainShader.setVec3("viewSource", camera.Position);
+            mainShader.setVec3("viewDirection", camera.Front);
 
             /* Use main shader */
             mainShader.use();
-
-            /* Bind VAO used for the cubes */
-            glBindVertexArray(VAO[2]);
-
-            /* Set active texture for ground */
-            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 2);
-
-            /* Find nearest large block */
-            cameraCubeSnapX = (int) camera.GetPosition().x;
-            cameraCubeSnapZ = (int) camera.GetPosition().z;
-
-            /* Calculate closest grid positions and place cubes there */
-            cameraCubeSnapX = cameraCubeSnapX - remainder(cameraCubeSnapX, 200);
-            cameraCubeSnapZ = cameraCubeSnapZ - remainder(cameraCubeSnapZ, 200);
-
-            /* Always center ground righ below camera */
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, CUBE_SCALE / 2 + 3.0f, 0.0f));
-            /* Translate with time */
-            model = glm::translate(model, glm::vec3(fmod((float) glfwGetTime() + 50, 200.0f) - 100 + cameraCubeSnapX, 0.0f, cameraCubeSnapZ));
-            
-            /* Resize*/ 
-            model = glm::scale(model, glm::vec3(CUBE_SCALE, CUBE_SCALE, CUBE_SCALE));
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-
-            /* Draw triangle*/
-            glDrawElements(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0);
-
-            /* Store cube data into shaders */
-            mainShader.setVec3("cubePos", 
-                glm::vec3(fmod((float) glfwGetTime() + 50, 200.0f) - 100 + cameraCubeSnapX, 0.0f, cameraCubeSnapZ));
-            
 
             /* Bind VAO used for objects */
             glBindVertexArray(VAO[1]); 
