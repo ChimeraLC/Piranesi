@@ -18,8 +18,8 @@ void main()
 
     // Check if within cone
     float theta = dot(lightDir, normalize(-viewDirection));
-    float epsilon = (viewRadius - viewRadiusOuter);
-    float intensity = clamp((theta - viewRadiusOuter) / epsilon, 0.0, 1.0);
+    float epsilon = viewRadiusOuter - viewRadius;
+    float intensity = clamp((viewRadiusOuter - theta) / epsilon, 0.0, 1.0);
 
     // Calculate light levels
     vec3 norm = normalize(Normal);

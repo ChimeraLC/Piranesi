@@ -1,4 +1,4 @@
-/* Class that handles all of camera placement */
+/* Class that handles all of camera placement for a camera that deals with collisions */
 
 #ifndef CAMERA_H
 #define CAMERA_H

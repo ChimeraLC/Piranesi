@@ -28,11 +28,6 @@ float ShadowCalculations(vec4 fragPosLightSpace)
 
 void main()
 {
-    // Light intensity calculations
-    //float distance  = length(lightSource - FragPos);
-    //float intensity = lightIntensity / (1.0 + distance / 500 + 
-    //		     (distance * distance) / 2000000);  
-
     // Texture values
     vec3 tex = texture(textureMap, TexCoord).rgb;
 

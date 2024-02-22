@@ -4,13 +4,12 @@
 #include <cmath>
 #include <GLFW/glfw3.h>
 
-#define STB_IMAGE_IMPLEMENTATION
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include "shaders/shader_s.h"
-#include "camera.h"
+#include "controlledCamera.h"
 
 typedef struct {
     int width;
@@ -21,7 +20,7 @@ typedef struct {
 // Function headings
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn);
-void handleInput(GLFWwindow *window, float delta);
+void handleInput(GLFWwindow *window, float delta, glm::vec3 *pillarPositions, unsigned int pillarInstances);
 int bind_texture(char* textureFilename, int glTexture);
 Image readBMP(char* filename);
 
@@ -37,12 +36,14 @@ bool mouseFound = false; // If the mouse has been moved yet
 
 // Rendering settings
 const float FPS = 30.0f;
-const float GROUND_SCALE = 400.0f;
+const float GROUND_SCALE = 150.0f;
 const int PILLAR_SPACING = 8.0f;
-const int PILLAR_COUNT = 25;
-const float PILLAR_HEIGHT = 20.0f;
-const float PILLAR_WIDTH = 3.0f;
-const glm::vec3 LIGHT_SOURCE = glm::vec3(50.0f, 400.0f, 0.0f);
+const int PILLAR_WIDTH = 3.0f;
+const int PILLAR_COUNT = 7;
+const float PILLAR_HEIGHT = 30.0f;
+const glm::vec3 FOG_COLOR = glm::vec3(0.06f, 0.06f, 0.06f);
+const float FLASHLIGHT_RADIUS = glm::cos(glm::radians(7.5f));
+const float FLASHLIGHT_RADIUS_OUTER = glm::cos(glm::radians(25.0f));
 
 using namespace std;
 
@@ -80,24 +81,10 @@ int main() {
     } 
 
     /* Building and compiling shaders */
-    Shader mainShader("shaders/shader.vs", "shaders/shader.fs");
-    Shader lightShader("shaders/lightshader.vs", "shaders/lightshader.fs");
+    Shader mainShader("shaders/darkshader.vs", "shaders/darkshader.fs");
 
     /* Enable vertex depth */
     glEnable(GL_DEPTH_TEST);  
-
-    /* Vertex data for cubes */
-    float cubeVertices[] = {
-        -0.5f, -0.5f, -0.5f,  
-         0.5f, -0.5f, -0.5f,  
-         0.5f, -0.5f,  0.5f,  
-        -0.5f, -0.5f,  0.5f,  
-
-        -0.5f,  0.5f, -0.5f,  
-         0.5f,  0.5f, -0.5f, 
-         0.5f,  0.5f,  0.5f,  
-        -0.5f,  0.5f,  0.5f,  
-    };
 
     /* Vertex data for pillars */
     float pillarVertices[] = {
@@ -122,22 +109,6 @@ int main() {
          0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
     };
 
-    /* Indice data for cube */
-    unsigned int cubeIndices[] = {
-        0, 1, 2,
-        0, 2, 3,
-        0, 1, 5,
-        0, 4, 5,
-        1, 2, 6,
-        1, 5, 6,
-        2, 3, 7,
-        2, 6, 7,
-        3, 0, 4,
-        3, 7, 4,
-        4, 5, 6,
-        4, 6, 7,
-    };
-
     /* Incide data for pillar */
     unsigned int pillarIndices[] = {
         0, 1, 2, 0, 2, 3,
@@ -147,7 +118,7 @@ int main() {
     };
 
     /* Positions of all cubes */
-    glm::vec3 pillarPositions[4];
+    glm::vec3 pillarPositions[PILLAR_COUNT * PILLAR_COUNT];
 
     /* Vertex data for ground */
     float groundVertices[] = {
@@ -162,6 +133,9 @@ int main() {
         0, 1, 3,
         1, 2, 3
     };
+    
+    /* Number of pillars to draw */
+    unsigned int pillarInstances = 0; 
 
     /* Vertex array and buffer objects, alongside element buffer objects. */
     unsigned int VBO[3], VAO[3], EBO[3];
@@ -192,28 +166,14 @@ int main() {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
-    /* Binding VAO used for the light source */
+    /* Binding VAO used for pillars */
     glBindVertexArray(VAO[1]);
 
     /* Configuring vertex and indice data */
     glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
-
-    // Getting position vectors
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    /* Binding VAO used for pillars */
-    glBindVertexArray(VAO[2]);
-
-    /* Configuring vertex and indice data */
-    glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
     glBufferData(GL_ARRAY_BUFFER, sizeof(pillarVertices), pillarVertices, GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[2]);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[1]);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(pillarIndices), pillarIndices, GL_STATIC_DRAW);
 
     // Getting position vectors
@@ -228,11 +188,22 @@ int main() {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
+    /* Configuring shader textures */
+    mainShader.use();
+
     /* Generate texture for ground */
     bind_texture((char *)"textures/ground_texture.bmp", GL_TEXTURE0);
 
     /* Generate texture for the pillars */
     bind_texture((char *)"textures/wood_texture.bmp", GL_TEXTURE1);
+
+    /* Generate texture for the cubes */
+    bind_texture((char *)"textures/stone_texture.bmp", GL_TEXTURE2);
+
+    /* Fog color and other values */
+    mainShader.setVec3("fogColor", FOG_COLOR);
+    mainShader.setFloat("viewRadius", FLASHLIGHT_RADIUS);
+    mainShader.setFloat("viewRadiusOuter", FLASHLIGHT_RADIUS_OUTER);
 
     /* Timing of frames */
     float delta = 0.0f;
@@ -252,13 +223,42 @@ int main() {
         {
             prevFrame = currentFrame;
             /* Process inputs */
-            handleInput(window, delta);
+            handleInput(window, delta, pillarPositions, pillarInstances);
+
+            /* Calculate camera grid */
+            float cameraGridX, cameraSnapX;
+            float cameraGridZ, cameraSnapZ;
+            /* Snap ground position to grid */
+            cameraSnapX = (int) camera.GetPosition().x;
+            cameraSnapZ = (int) camera.GetPosition().z;
+
+            /* Calculate closest grid positions and place cubes there */
+            cameraSnapX = cameraSnapX - remainder(cameraSnapX, PILLAR_SPACING);
+            cameraSnapZ = cameraSnapZ - remainder(cameraSnapZ, PILLAR_SPACING);
+
+            /* Start from far corner*/
+            cameraGridX = cameraSnapX - PILLAR_SPACING * PILLAR_COUNT / 2;
+            cameraGridZ = cameraSnapZ - PILLAR_SPACING * PILLAR_COUNT / 2;
+            pillarInstances = 0; /* Number of pillars to draw */
+            float pillarX;
+            float pillarY;
+            for (unsigned int i = 0; i < PILLAR_COUNT; i++) {
+                for (unsigned int j = 0; j < PILLAR_COUNT; j++) {
+                    /* Only draw ocasional pillars*/
+                    pillarX = cameraGridX + PILLAR_SPACING * i;
+                    pillarY = cameraGridZ + PILLAR_SPACING * j;
+                    pillarPositions[pillarInstances] = 
+                        glm::vec3(pillarX, -2.0f, pillarY);
+                    pillarInstances += 1;
+                }
+            }
 
             /* Clear gl data */
-            glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+            glClearColor(FOG_COLOR.x, FOG_COLOR.y, FOG_COLOR.z, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             /* Create transformations */
+            mainShader.use();
             glm::mat4 model = glm::mat4(1.0f);
             glm::mat4 view = camera.GetViewMatrix();
             glm::mat4 projection    = glm::mat4(1.0f);
@@ -268,81 +268,26 @@ int main() {
             unsigned int modelLoc = glGetUniformLocation(mainShader.ID, "model");
             unsigned int viewLoc  = glGetUniformLocation(mainShader.ID, "view");
             unsigned int projLoc  = glGetUniformLocation(mainShader.ID, "projection");
+            unsigned int viewSourceLoc = glGetUniformLocation(mainShader.ID, "viewSource");
+            unsigned int viewDirectionLoc = glGetUniformLocation(mainShader.ID, "viewDirection");
             unsigned int lightIntensityLoc  = glGetUniformLocation(mainShader.ID, "lightIntensity");
-            //unsigned int lightSourceLoc  = glGetUniformLocation(mainShader.ID, "lightSource");
             glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-            glUniform1f(lightIntensityLoc, 1.0f);
-            mainShader.setVec3("viewSource", camera.Position);
-            mainShader.setVec3("lightSource", LIGHT_SOURCE); // TODO: why doesn't other way work?
-
-            /* Use light shader */
-            lightShader.use();
-
-            /* Bind VAO used for the light source */
-            glBindVertexArray(VAO[1]);
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(6.25f, 50.0f, 0.0f));
-            glm::vec3 cameraPosition = camera.GetPosition();
-            cameraPosition.x *= 17.5f/20.0f;
-            cameraPosition.z *= 17.5f/20.0f;
-            cameraPosition.y = 0;
-            model = glm::translate(model, cameraPosition);
-            model = glm::scale(model, glm::vec3(5.0f, 5.0f, 5.0f));
-            lightShader.setMat4("projection", projection);
-            lightShader.setMat4("view", view);
-            lightShader.setMat4("model", model);
-
-            /* Draw triangle*/
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+            glUniform3fv(viewSourceLoc, 1, glm::value_ptr(camera.Position));
+            glUniform3fv(viewDirectionLoc, 1, glm::value_ptr(camera.Front));
+            glUniform1f(lightIntensityLoc, 0.9f);
 
             /* Use main shader */
             mainShader.use();
 
-            /* Bind VAO used for the ground*/
-            glBindVertexArray(VAO[0]);
-
-            /* Set active texture for ground */
-            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 0);
-
-            /* Always center ground righ below camera */
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, -2.0f, 0.0f));
-            float cameraGridX;
-            float cameraGridZ;
-            /* Snap ground position to grid */
-            cameraGridX = (int) camera.GetPosition().x;
-            cameraGridZ = (int) camera.GetPosition().z;
-            model = glm::translate(model, glm::vec3(cameraGridX, 0.0f, cameraGridZ));
-            /* Resize */
-            model = glm::scale(model, glm::vec3(GROUND_SCALE, 1.0, GROUND_SCALE));
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-
-            /* Draw triangle*/
-            glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
-
-            /* Calculate closest grid positions and place cubes there */
-            cameraGridX -= remainder(cameraGridX, PILLAR_SPACING);
-            cameraGridZ -= remainder(cameraGridZ, PILLAR_SPACING);
-
-            /* Start from far corner*/
-            cameraGridX -= PILLAR_SPACING;
-            cameraGridZ -= PILLAR_SPACING;
-            for (unsigned int i = 0; i < 2; i++) {
-                for (unsigned int j = 0; j < 2; j++) {
-                    pillarPositions[2 * i + j] = 
-                        glm::vec3(cameraGridX + PILLAR_SPACING * i, -2.0f, cameraGridZ + PILLAR_SPACING * j);
-                }
-            }
-
             /* Bind VAO used for objects */
-            glBindVertexArray(VAO[2]); 
+            glBindVertexArray(VAO[1]); 
 
             /* Set active texture for pillars */
             glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 1);
 
             /* Draw each cube */
-            for (unsigned int i = 0; i < sizeof(pillarPositions) / sizeof(pillarPositions[0]); i++) {
+            for (unsigned int i = 0; i < pillarInstances; i++) {
                 /* Generate model transformations */
                 glm::mat4 model = glm::mat4(1.0f);
 
@@ -354,9 +299,27 @@ int main() {
                 /* Pass model transformation to shaders. */
                 glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
-                /* Draw triangle*/
-                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+                /* Draw triangles, not including top or bottom since invisible. */
+                glDrawElements(GL_TRIANGLES, 24, GL_UNSIGNED_INT, 0);
             }
+
+
+            /* Bind VAO used for the ground*/
+            glBindVertexArray(VAO[0]);
+
+            /* Set active texture for ground */
+            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 0);
+
+            /* Always center ground righ below camera */
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(0.0f, -2.0f, 0.0f));
+            model = glm::translate(model, glm::vec3(cameraSnapX, 0.0f, cameraSnapZ));
+            /* Resize */
+            model = glm::scale(model, glm::vec3(GROUND_SCALE, 1.0, GROUND_SCALE));
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+            /* Draw triangle*/
+            glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
 
             /* Swap buffers and poll events */
             glfwSwapBuffers(window);
@@ -381,7 +344,7 @@ int main() {
  * Effects:
  *  Handles the user input for the given window.
  */
-void handleInput(GLFWwindow *window, float delta)
+void handleInput(GLFWwindow *window, float delta, glm::vec3 *pillarPositions, unsigned int pillarInstances)
 {
     /* If user presses escape, close window */
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -412,7 +375,10 @@ void handleInput(GLFWwindow *window, float delta)
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
         move_inputs *= 3;
     }
-    camera.ProcessInputs(move_inputs);
+    move_inputs *= delta;
+
+    /* Pass information to camera */
+    camera.ProcessInputs(move_inputs, pillarPositions, pillarInstances, PILLAR_WIDTH);
 }
 
 /* 
@@ -480,9 +446,13 @@ Image readBMP(char* filename)
     unsigned char header[54];
     fread(header, sizeof(unsigned char), 54, f);
 
-    /* Get height and width info */
+    /* Get height, width, and offset info */
     int width = *(int*) &header[18];
     int height = *(int*) &header[22];
+    int offset = *(int *) &header[10];
+
+    /* Going to beginning of pixel data */
+    fseek(f, offset, SEEK_SET);
 
     /* Create corresponding image size*/
     unsigned char* data = (unsigned char*) calloc(3 * width * height, sizeof(unsigned char));

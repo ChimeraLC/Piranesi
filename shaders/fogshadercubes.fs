@@ -19,7 +19,7 @@ void main()
     // Applying to texture
     vec3 text = texture(textureID, TexCoord).rgb;
 
-    // Applying darkening to textures
+    // Applying darkening to textures below cubes
     if (FragPos.x < cubePos.x + cubeSize / 2 &&
         FragPos.x > cubePos.x - cubeSize / 2 &&
         FragPos.z > cubePos.z - cubeSize / 2 &&

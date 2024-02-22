@@ -12,11 +12,6 @@ uniform vec3 viewSource;
 
 void main()
 {
-    // Light intensity calculations
-    //float distance  = length(lightSource - FragPos);
-    //float intensity = lightIntensity / (1.0 + distance / 500 + 
-    //		     (distance * distance) / 2000000);  
-
     // Ambient light
     float ambientVal= 0.2;
 
