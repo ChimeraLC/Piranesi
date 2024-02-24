@@ -1,2 +1,2 @@
 all:
-	g++ -I include -Wall -Wextra -Werror -o main forestdark.cpp glad.c -lglfw3 -lopengl32 -lgdi32
+	g++ -I include -Wall -Wextra -Werror -o main house.cpp glad.c -lglfw3 -lopengl32 -lgdi32
