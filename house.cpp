@@ -141,7 +141,7 @@ int main() {
     mainShader.use();
 
     /* Generate texture for ground */
-    bind_texture(256, 256, GL_TEXTURE0);
+    bind_texture(1024, 1024, GL_TEXTURE0);
 
     /* Timing of frames */
     float delta = 0.0f;
@@ -195,16 +195,24 @@ int main() {
             glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 0);
 
             /* Always center ground right below camera */
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, -2.0f, 0.0f));
 
-            /* Resize */
-            model = glm::scale(model, glm::vec3(3, 1.0, 3));
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            /* Generate transitions */
+            for (int i = -5; i <= 5; i++) {
+                for (int j = -5; j <= 5; j++) {
 
-            /* Draw triangle*/
-            glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
+                    model = glm::mat4(1.0f);
+                    model = glm::translate(model, glm::vec3(i, -2.0f, j));
 
+                    /* Resize */
+                    model = glm::scale(model, glm::vec3(5, 1.0, 5));
+                    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+                    /* Draw triangle*/
+                    if (i == 0 && j == 0)
+                    glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
+
+                }
+            }
             /* Swap buffers and poll events */
             glfwSwapBuffers(window);
             glfwPollEvents();
@@ -368,16 +376,18 @@ Image generate_texture(int height, int width)
     Perlin perlin = Perlin(height, width);
 
     /* Marble Colors*/
-    int marble_dark[3] = {205, 224, 227};
-    int marble_light[3] = {240, 252, 255};
+    int marble_dark[3] = {180, 190, 195};
+    int marble_light[3] = {205, 224, 227};
 
 
     /* Generate internals */
     for (int row = 0; row < height; row++) {
         for (int col = 0; col < width; col ++) {
             /* Calculate noise */
-            double noise = perlin.Turbulence(col, row),
-                light_noise = noise,
+            double noise = perlin.Perlin_Val((double) col, (double) row);
+
+            /* Expand dark and light values */
+            double  light_noise = noise,
                 dark_noise = 1 - noise;
             
             /* Blue */
