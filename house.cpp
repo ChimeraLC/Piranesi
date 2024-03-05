@@ -17,6 +17,7 @@
 #include "shaders/shader_s.h"
 #include "camera.h"
 #include "perlin.h"
+#include "shapes.h"
 
 /* Namespace */
 using namespace std;
@@ -94,53 +95,11 @@ int main()
     /* Enable vertex depth */
     glEnable(GL_DEPTH_TEST);
 
-    /* Vertex data for ground */
-    float groundVertices[] = {
-        // Position           // Texture         // Normal
-        -0.5f,
-        -0.5f,
-        -0.5f,
-        0.0f,
-        0.0f,
-        0.0f,
-        1.0f,
-        0.0f,
-        0.5f,
-        -0.5f,
-        -0.5f,
-        1.0f,
-        0.0f,
-        0.0f,
-        1.0f,
-        0.0f,
-        0.5f,
-        -0.5f,
-        0.5f,
-        1.0f,
-        1.0f,
-        0.0f,
-        1.0f,
-        0.0f,
-        -0.5f,
-        -0.5f,
-        0.5f,
-        0.0f,
-        1.0f,
-        0.0f,
-        1.0f,
-        0.0f,
-    };
-
-    /* Indices for ground */
-    unsigned int groundIndices[] = {
-        0, 1, 3,
-        1, 2, 3};
-
     /* Vertex array and buffer objects, alongside element buffer objects. */
-    unsigned int VBO[1], VAO[1], EBO[1];
-    glGenVertexArrays(1, VAO);
-    glGenBuffers(1, VBO);
-    glGenBuffers(1, EBO);
+    unsigned int VBO[2], VAO[2], EBO[2];
+    glGenVertexArrays(2, VAO);
+    glGenBuffers(2, VBO);
+    glGenBuffers(2, EBO);
 
     /* Binding VAO used for the ground */
     glBindVertexArray(VAO[0]);
@@ -151,6 +110,28 @@ int main()
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[0]);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(groundIndices), groundIndices, GL_STATIC_DRAW);
+
+    // Getting position vectors
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+
+    // Getting texture vectors
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // Getting normal vectors
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(5 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    /* Binding VAO used for cubes */
+    glBindVertexArray(VAO[1]);
+
+    /* Configuring vertex and indice data */
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[1]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
 
     // Getting position vectors
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
@@ -196,22 +177,6 @@ int main()
             glClearColor(0.2f, 0.3f, 0.4f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            /* Create transformations */
-            mainShader.use();
-            glm::mat4 model = glm::mat4(1.0f);
-            glm::mat4 view = camera.GetViewMatrix();
-            glm::mat4 projection = glm::mat4(1.0f);
-            projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-
-            /* Store transformation data locations */
-            unsigned int modelLoc = glGetUniformLocation(mainShader.ID, "model");
-            unsigned int viewLoc = glGetUniformLocation(mainShader.ID, "view");
-            unsigned int projLoc = glGetUniformLocation(mainShader.ID, "projection");
-
-            /* View and projection values are constant */
-            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-            glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-
             /* Use main shader */
             mainShader.use();
 
@@ -227,24 +192,56 @@ int main()
             cameraGridX = floor(cameraPos.x / GRID_WIDTH);
             cameraGridZ = floor(cameraPos.z / GRID_WIDTH);
 
+            /* Create transformations */
+            glm::mat4 model = glm::mat4(1.0f);
+            camera.SetCameraHeight(((int) cameraGridX * 17 + (int) cameraGridZ * 13) % 3);
+            glm::mat4 view = camera.GetViewMatrix();
+            glm::mat4 projection = glm::mat4(1.0f);
+            projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+
+            /* Store transformation data locations */
+            unsigned int modelLoc = glGetUniformLocation(mainShader.ID, "model");
+            unsigned int viewLoc = glGetUniformLocation(mainShader.ID, "view");
+            unsigned int projLoc = glGetUniformLocation(mainShader.ID, "projection");
+
+            /* View and projection values are constant */
+            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+            cameraGridX = 0;
+            cameraGridZ = 0;
+
             /* Generate transitions */
             for (int i = cameraGridX - 2; i <= cameraGridX + 2; i++)
             {
+                for (int j = cameraGridZ - 2; j <= cameraGridZ + 2; j++) {
 
-                model = glm::mat4(1.0f);
-                /* Translate to be along gridlines */
-                model = glm::translate(model, glm::vec3(GRID_WIDTH / 2, -2.0f, GRID_WIDTH / 2));
+                    model = glm::mat4(1.0f);
+                    /* Translate to be along gridlines */
+                    model = glm::translate(model, glm::vec3(GRID_WIDTH / 2, -2.0f, GRID_WIDTH / 2));
 
-                /* Translate to player */
-                model = glm::translate(model, glm::vec3(GRID_WIDTH * i, -2.0f, GRID_WIDTH * cameraGridZ));
+                    /* Update height */
+                    model = glm::translate(model, glm::vec3(0, (i * 17 + j * 13) % 3, 0));
 
-                /* Resize */
-                model = glm::scale(model, glm::vec3(GRID_WIDTH, 1.0, GRID_WIDTH));
-                glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                    /* Translate to player */
+                    model = glm::translate(model, glm::vec3(GRID_WIDTH * i, 0.0f, GRID_WIDTH * j));
 
-                /* Draw triangle*/
-                glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
+                    /* Resize */
+                    model = glm::scale(model, glm::vec3(GRID_WIDTH, 1.0, GRID_WIDTH));
+                    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+                    /* Draw triangle*/
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+                }
             }
+
+            /* Bind VAO used for the cube */
+            glBindVertexArray(VAO[1]);
+            model = glm::mat4(1.0f);
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+
             /* Swap buffers and poll events */
             glfwSwapBuffers(window);
             glfwPollEvents();

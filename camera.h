@@ -62,6 +62,15 @@ class Camera
             return Position;
         }
 
+        /*
+         * Effects:
+         *      Sets the height of the camera
+        */
+        void SetCameraHeight(float yHeight)
+        {
+            Position.y = yHeight;
+        }
+
        /* 
         *  Effects:
         *       Processes mouse movements recieved by window.
