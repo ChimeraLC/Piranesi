@@ -29,8 +29,13 @@ public:
         9980869,
     };
     int Prime_index = 0;
+    double xPeriod = 4;
+    double yPeriod = 8;
+    double power = 5;
+    double size = 16;
     int Height;
     int Width;
+    double** NoiseGrid;
 
     /*
      * Constructor that creates the Perlin noise class.
@@ -39,6 +44,61 @@ public:
     {
         Height = height;
         Width = width;
+
+        /* Allocate array */
+        NoiseGrid = (double **) malloc(height * sizeof(double*));
+        for (int i = 0; i < height; i++) {
+            NoiseGrid[i] = (double*) malloc(width * sizeof(double));
+        }
+
+        /* Create initial noise */
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                NoiseGrid[i][j] = (rand() % 32768) / 32768.0;
+            }
+        }
+    }
+
+    /**
+     * Returns the smoothed noise value at a specific pixel 
+     */
+    double SmoothNoise(double x, double y)
+    {
+        /* Fractional parts of x and y */
+        double fX = x - (int) x;
+        double fY = y - (int) y;
+
+        /* Integer parts */
+        int iX1 = (int) x;
+        int iY1 = (int) y;
+
+        int iX2 = (iX1 - 1 + Width) % Width;
+        int iY2 = (iY1 - 1 + Height) % Height;
+
+        /* Calculate smoothed value */
+        double total = 0;
+        total += fX * fY * NoiseGrid[iY1][iX1];
+        total += (1 - fX) * fY * NoiseGrid[iY1][iX2];
+        total += fX * (1 - fY) * NoiseGrid[iY2][iX1];
+        total += (1 - fX) * (1 - fY) * NoiseGrid[iY2][iX2];
+
+        return total;
+    }
+
+    /* Calculates the turbulence noise based on a given size */
+    double Turbulence(double x, double y, double size)
+    {
+        double total = 0;
+        double sizeWalker = size;
+
+        /* Calculate overlapping turbulence */
+        while (sizeWalker >= 1)
+        {
+            total += SmoothNoise(x / sizeWalker, y / sizeWalker) * sizeWalker;
+            sizeWalker /= 2;
+        }
+
+        return (total / size / 2);
     }
 
     /* Interpolates between two values */
@@ -54,9 +114,21 @@ public:
     }
 
     /*
-     * Generates pseudorandom noise value between 0 and 2pi
+     * Generates pseudorandom noise value between 0 and 1
      */
     double Noise(int i, int x, int y)
+    {
+        int n = x + y * 59;
+        n = (n << 13) ^ n;
+        int a = Primes[i * 3], b = Primes[i * 3 + 1], c = Primes[i * 3 + 2];
+        int t = (n * (n * n * a + b) + c) & 0x3fffffff;
+        double rand = 1.0 - (double)(t) / (1 << 30);
+        return rand;
+    }
+    /*
+     * Generates pseudorandom noise value between 0 and 2pi
+     */
+    double Cos_Noise(int i, int x, int y)
     {
         int n = x + y * 59;
         n = (n << 13) ^ n;
@@ -72,7 +144,7 @@ public:
     double Gradient(int i, int ix, int iy, double x, double y)
     {
         /* Calculate noise */
-        double noise = Noise(i, ix, iy);
+        double noise = Cos_Noise(i, ix, iy);
 
         /* Calculate distances */
         double dx = x - (double)ix;
@@ -119,8 +191,9 @@ public:
     }
 
     double Perlin_Marble(double x, double y)
-    {
-        double total = Perlin_Val(x, y);
-        return sin(2 * (total)) * 0.7 + 0.3;
+    {   
+        double val = x * xPeriod / Width + y * yPeriod / Height +
+            power * Turbulence(x, y, size);
+        return abs(sin(val * 3.141592));
     }
 };
