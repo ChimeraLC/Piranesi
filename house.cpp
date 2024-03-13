@@ -51,6 +51,7 @@ bool mouseFound = false; // If mouse has been moved
 /* Rendering settings */
 const float FPS = 30.0f;
 const int GRID_WIDTH = 4;
+const int RENDER_RADIUS = 5;
 
 /* Main function */
 
@@ -95,11 +96,28 @@ int main()
     /* Enable vertex depth */
     glEnable(GL_DEPTH_TEST);
 
+    /* Generate translation vector array */
+    int RENDER_COUNT = (2 * RENDER_RADIUS + 1) * (2 * RENDER_RADIUS + 1); // Total rendered grids
+    float translations[3 * RENDER_COUNT];
+    for (int i = -RENDER_RADIUS; i <= RENDER_RADIUS; i++) {
+        for (int j = -RENDER_RADIUS; j <= RENDER_RADIUS; j++) {
+            int index = 3 * ((j + RENDER_RADIUS) + (i + RENDER_RADIUS) * (2 * RENDER_RADIUS + 1));
+            translations[index] = i;
+            translations[index + 1] = -(abs(i) + abs(j)) / 3;
+            translations[index + 2] = j;
+        }
+    }
+
+    /* Create vertex buffer for instances */
+    unsigned int instanceVBO;
+    glGenBuffers(1, &instanceVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(translations), translations, GL_DYNAMIC_DRAW);
+
     /* Vertex array and buffer objects, alongside element buffer objects. */
-    unsigned int VBO[2], VAO[2], EBO[2];
-    glGenVertexArrays(2, VAO);
-    glGenBuffers(2, VBO);
-    glGenBuffers(2, EBO);
+    unsigned int VBO[1], VAO[1];
+    glGenVertexArrays(1, VAO);
+    glGenBuffers(1, VBO);
 
     /* Binding VAO used for the ground */
     glBindVertexArray(VAO[0]);
@@ -108,48 +126,29 @@ int main()
     glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
     glBufferData(GL_ARRAY_BUFFER, sizeof(groundVertices), groundVertices, GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(groundIndices), groundIndices, GL_STATIC_DRAW);
-
-    // Getting position vectors
+    /* Getting position vectors */
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
     glEnableVertexAttribArray(0);
 
-    // Getting texture vectors
+    /* Getting texture vectors */
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
-
-    // Getting normal vectors
+    
+    /* Getting normal vectors */
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
-
-    /* Binding VAO used for cubes */
-    glBindVertexArray(VAO[1]);
-
-    /* Configuring vertex and indice data */
-    glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
-
-    // Getting position vectors
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
-    glEnableVertexAttribArray(0);
-
-    // Getting texture vectors
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    // Getting normal vectors
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(5 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-
+    
+    /* Configuring instancing data */
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribDivisor(3, 1);
+    glEnableVertexAttribArray(3);
+    
     /* Configuring shader textures */
     mainShader.use();
 
     /* Generate texture for ground */
-    bind_texture(128, 128, GL_TEXTURE0);
+    bind_texture(512, 512, GL_TEXTURE0);
 
     /* Timing of frames */
     float delta = 0.0f;
@@ -192,12 +191,27 @@ int main()
             cameraGridX = floor(cameraPos.x / GRID_WIDTH);
             cameraGridZ = floor(cameraPos.z / GRID_WIDTH);
 
-            /* Create transformations */
+            /* Recalculate positions */
+            for (int i = -RENDER_RADIUS; i <= RENDER_RADIUS; i++) {
+                for (int j = -RENDER_RADIUS; j <= RENDER_RADIUS; j++) {
+                    int index = 3 * ((j + RENDER_RADIUS) + (i + RENDER_RADIUS) * (2 * RENDER_RADIUS + 1));
+                    int trueX = i + cameraGridX;
+                    int trueZ = j + cameraGridZ;
+                    translations[index] = i;
+                    translations[index + 1] = -((float) (abs(trueX) + abs(trueZ))) / 3;
+                    translations[index + 2] = j;
+                }
+            }
+
+            /* Update camera height */
+            camera.SetCameraHeight(-(float) (abs((int) cameraGridX) + abs((int) cameraGridZ)) / 3);
+
+            /* Create shader transformations */
             glm::mat4 model = glm::mat4(1.0f);
-            camera.SetCameraHeight(((int) cameraGridX * 17 + (int) cameraGridZ * 13) % 3);
             glm::mat4 view = camera.GetViewMatrix();
             glm::mat4 projection = glm::mat4(1.0f);
             projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+
 
             /* Store transformation data locations */
             unsigned int modelLoc = glGetUniformLocation(mainShader.ID, "model");
@@ -208,39 +222,22 @@ int main()
             glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
+            /* Map into buffer */
+            glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+            void *ptr = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+            memcpy(ptr, translations, sizeof(translations));
+            glUnmapBuffer(GL_ARRAY_BUFFER);
+
+            /* Resize and move to camera */
+            model = glm::translate(model, glm::vec3(GRID_WIDTH / 2, 0, GRID_WIDTH / 2));
+            model = glm::scale(model, glm::vec3(GRID_WIDTH, 1.0, GRID_WIDTH));
+            model = glm::translate(model, glm::vec3(cameraGridX, 0, cameraGridZ));
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
             cameraGridX = 0;
             cameraGridZ = 0;
 
-            /* Generate transitions */
-            for (int i = cameraGridX - 2; i <= cameraGridX + 2; i++)
-            {
-                for (int j = cameraGridZ - 2; j <= cameraGridZ + 2; j++) {
-
-                    model = glm::mat4(1.0f);
-                    /* Translate to be along gridlines */
-                    model = glm::translate(model, glm::vec3(GRID_WIDTH / 2, -2.0f, GRID_WIDTH / 2));
-
-                    /* Update height */
-                    model = glm::translate(model, glm::vec3(0, (i * 17 + j * 13) % 3, 0));
-
-                    /* Translate to player */
-                    model = glm::translate(model, glm::vec3(GRID_WIDTH * i, 0.0f, GRID_WIDTH * j));
-
-                    /* Resize */
-                    model = glm::scale(model, glm::vec3(GRID_WIDTH, 1.0, GRID_WIDTH));
-                    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-
-                    /* Draw triangle*/
-                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-                }
-            }
-
-            /* Bind VAO used for the cube */
-            glBindVertexArray(VAO[1]);
-            model = glm::mat4(1.0f);
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, RENDER_COUNT);
 
             /* Swap buffers and poll events */
             glfwSwapBuffers(window);
@@ -251,7 +248,6 @@ int main()
     /* Deallocate resources */
     glDeleteVertexArrays(1, VAO);
     glDeleteBuffers(1, VBO);
-    glDeleteBuffers(1, EBO);
 
     /* Terminate glfw */
     glfwTerminate();
@@ -415,11 +411,10 @@ Image generate_texture(int height, int width)
     unsigned char *data = (unsigned char *)calloc(3 * width * height, sizeof(unsigned char));
 
     /* Create perlin noise */
-    Perlin perlin = Perlin(height, width);
+    Perlin perlin = Perlin((height + 1) / 2, (width + 1) / 2);
 
     /* Marble Colors*/
-    int marble_dark[3] = {180, 190, 195};
-    // int marble_dark[3] = {0, 0, 0};
+    int marble_dark[3] = {0, 0, 0};
     int marble_light[3] = {205, 224, 227};
 
     /* Generate internals */
@@ -428,7 +423,7 @@ Image generate_texture(int height, int width)
         for (int col = 0; col < width / 2; col++)
         {
             /* Calculate noise */
-            double noise = perlin.Perlin_Marble((double)col, (double)row);
+            double noise = perlin.Perlin_Marble(col, row);
 
             /* Expand dark and light values */
             double light_noise = noise,
@@ -437,24 +432,26 @@ Image generate_texture(int height, int width)
             /* Blue */
             data[3 * (row * width + col)] =
                 (unsigned char)(dark_noise * marble_dark[0] + light_noise * marble_light[0]);
+            /* Green */
+            data[3 * (row * width + col) + 1] =
+                (unsigned char)(dark_noise * marble_dark[1] + light_noise * marble_light[1]);
+            /* Red */
+            data[3 * (row * width + col) + 2] =
+                (unsigned char)(dark_noise * marble_dark[2] + light_noise * marble_light[2]);
+
+            /* Flip to corners TODO: SIMPLIFY THIS */
             data[3 * ((height - 1 - row) * width + col)] =
                 data[3 * (row * width + col)];
             data[3 * (row * width + (width - 1 - col))] =
                 data[3 * (row * width + col)];
             data[3 * ((height - 1 - row) * width + (width - 1 - col))] =
                 data[3 * (row * width + col)];
-            /* Green */
-            data[3 * (row * width + col) + 1] =
-                (unsigned char)(dark_noise * marble_dark[1] + light_noise * marble_light[1]);
             data[3 * ((height - 1 - row) * width + col) + 1] =
                 data[3 * (row * width + col) + 1];
             data[3 * (row * width + (width - 1 - col)) + 1] =
                 data[3 * (row * width + col) + 1];
             data[3 * ((height - 1 - row) * width + (width - 1 - col)) + 1] =
                 data[3 * (row * width + col) + 1];
-            /* Red */
-            data[3 * (row * width + col) + 2] =
-                (unsigned char)(dark_noise * marble_dark[2] + light_noise * marble_light[2]);
             data[3 * ((height - 1 - row) * width + col) + 2] =
                 data[3 * (row * width + col) + 2];
             data[3 * (row * width + (width - 1 - col)) + 2] =

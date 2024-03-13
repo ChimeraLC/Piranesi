@@ -335,7 +335,7 @@ int main() {
             /* Bind VAO used for the ground*/
             glBindVertexArray(VAO[0]);
 
-            /* Always center ground righ below camera */
+            /* Always center ground right below camera */
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, -2.0f, 0.0f));
             model = glm::translate(model, glm::vec3(cameraSnapX, 0.0f, cameraSnapZ));
