@@ -37,6 +37,7 @@ void handleInput(GLFWwindow *window, float delta);
 int bind_texture(int height, int width, int glTexture);
 Image readBMP(char *filename);
 Image generate_texture(int height, int width);
+void bindArrays(unsigned int *VAOs, unsigned int *VBOs, unsigned int *instanceVBOs);
 
 /* Window Settings */
 const unsigned int SCR_WIDTH = 1600;
@@ -108,42 +109,30 @@ int main()
         }
     }
 
+    /* Generate border values */
+    int BORDER_COUNT = (2 * RENDER_RADIUS + 1) * (2 * RENDER_RADIUS);
+    float bordersX[3 * BORDER_COUNT];
+    float bordersZ[3 * BORDER_COUNT];
+
     /* Create vertex buffer for instances */
-    unsigned int instanceVBO;
-    glGenBuffers(1, &instanceVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    unsigned int instanceVBO[3];
+    glGenBuffers(3, instanceVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO[0]);
     glBufferData(GL_ARRAY_BUFFER, sizeof(translations), translations, GL_DYNAMIC_DRAW);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO[1]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(bordersX), bordersX, GL_DYNAMIC_DRAW);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO[2]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(bordersZ), bordersZ, GL_DYNAMIC_DRAW); 
 
     /* Vertex array and buffer objects, alongside element buffer objects. */
-    unsigned int VBO[1], VAO[1];
-    glGenVertexArrays(1, VAO);
-    glGenBuffers(1, VBO);
+    unsigned int VBO[3], VAO[3];
+    glGenVertexArrays(3, VAO);
+    glGenBuffers(3, VBO);
 
-    /* Binding VAO used for the ground */
-    glBindVertexArray(VAO[0]);
+    bindArrays(&VAO[0], &VBO[0], &instanceVBO[0]);
 
-    /* Configuring vertex and indice data */
-    glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(groundVertices), groundVertices, GL_STATIC_DRAW);
-
-    /* Getting position vectors */
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
-    glEnableVertexAttribArray(0);
-
-    /* Getting texture vectors */
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    
-    /* Getting normal vectors */
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(5 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-    
-    /* Configuring instancing data */
-    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glVertexAttribDivisor(3, 1);
-    glEnableVertexAttribArray(3);
-    
     /* Configuring shader textures */
     mainShader.use();
 
@@ -179,19 +168,17 @@ int main()
             /* Use main shader */
             mainShader.use();
 
-            /* Bind VAO used for the ground*/
-            glBindVertexArray(VAO[0]);
-
-            /* Set active texture for ground */
-            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 0);
-
             /* Always center ground right below camera */
             float cameraGridX, cameraGridZ; // World is split into grid_size x grid_size squares
             glm::vec3 cameraPos = camera.GetPosition();
             cameraGridX = floor(cameraPos.x / GRID_WIDTH);
             cameraGridZ = floor(cameraPos.z / GRID_WIDTH);
 
-            /* Recalculate positions */
+            /* 
+             * Recalculate positions 
+             */
+
+            /* Ground translations */    
             for (int i = -RENDER_RADIUS; i <= RENDER_RADIUS; i++) {
                 for (int j = -RENDER_RADIUS; j <= RENDER_RADIUS; j++) {
                     int index = 3 * ((j + RENDER_RADIUS) + (i + RENDER_RADIUS) * (2 * RENDER_RADIUS + 1));
@@ -200,6 +187,30 @@ int main()
                     translations[index] = i;
                     translations[index + 1] = -((float) (abs(trueX) + abs(trueZ))) / 3;
                     translations[index + 2] = j;
+                }
+            }
+
+            /* WallX translations */
+            for (int i = -RENDER_RADIUS + 1; i <= RENDER_RADIUS; i++) {
+                for (int j = -RENDER_RADIUS; j <= RENDER_RADIUS; j++) {
+                    int index = 3 * ((j + RENDER_RADIUS) + (i + RENDER_RADIUS - 1) * (2 * RENDER_RADIUS + 1));
+                    int trueX = i + cameraGridX;
+                    int trueZ = j + cameraGridZ;
+                    bordersX[index] = i;
+                    bordersX[index + 1] = -((float) (abs(0.5 - trueX) + abs(trueZ))) / 3 - (float) 5 / 6;
+                    bordersX[index + 2] = j;
+                }
+            }
+
+            /* WallY translations */
+            for (int i = -RENDER_RADIUS; i <= RENDER_RADIUS; i++) {
+                for (int j = -RENDER_RADIUS + 1; j <= RENDER_RADIUS; j++) {
+                    int index = 3 * ((j + RENDER_RADIUS - 1) + (i + RENDER_RADIUS) * (2 * RENDER_RADIUS));
+                    int trueX = i + cameraGridX;
+                    int trueZ = j + cameraGridZ;
+                    bordersZ[index] = i;
+                    bordersZ[index + 1] = -((float) (abs(trueX) + abs(0.5 - trueZ))) / 3 - (float) 5 / 6;
+                    bordersZ[index + 2] = j;
                 }
             }
 
@@ -223,21 +234,57 @@ int main()
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
             /* Map into buffer */
-            glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+            glBindBuffer(GL_ARRAY_BUFFER, instanceVBO[0]);
             void *ptr = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
             memcpy(ptr, translations, sizeof(translations));
+            glUnmapBuffer(GL_ARRAY_BUFFER);
+
+            glBindBuffer(GL_ARRAY_BUFFER, instanceVBO[1]);
+            ptr = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+            memcpy(ptr, bordersX, sizeof(bordersX));
+            glUnmapBuffer(GL_ARRAY_BUFFER);
+
+            glBindBuffer(GL_ARRAY_BUFFER, instanceVBO[2]);
+            ptr = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+            memcpy(ptr, bordersZ, sizeof(bordersX));
             glUnmapBuffer(GL_ARRAY_BUFFER);
 
             /* Resize and move to camera */
             model = glm::translate(model, glm::vec3(GRID_WIDTH / 2, 0, GRID_WIDTH / 2));
             model = glm::scale(model, glm::vec3(GRID_WIDTH, 1.0, GRID_WIDTH));
             model = glm::translate(model, glm::vec3(cameraGridX, 0, cameraGridZ));
+
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
             cameraGridX = 0;
             cameraGridZ = 0;
 
+            /* Bind VAO used for the ground*/
+            glBindVertexArray(VAO[0]);
+
+            /* Set active texture for ground */
+            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 0);
+
+            /* Draw grounds */
             glDrawArraysInstanced(GL_TRIANGLES, 0, 6, RENDER_COUNT);
+
+            /* Bind VAO used for the ground*/
+            glBindVertexArray(VAO[1]);
+
+            /* Set active texture for ground */
+            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 0);
+
+            /* Draw grounds */
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, BORDER_COUNT);
+            
+            /* Bind VAO used for the ground*/
+            glBindVertexArray(VAO[2]);
+
+            /* Set active texture for ground */
+            glUniform1i(glGetUniformLocation(mainShader.ID, "textureID"), 0);
+
+            /* Draw grounds */
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, BORDER_COUNT);
 
             /* Swap buffers and poll events */
             glfwSwapBuffers(window);
@@ -246,8 +293,9 @@ int main()
     }
 
     /* Deallocate resources */
-    glDeleteVertexArrays(1, VAO);
-    glDeleteBuffers(1, VBO);
+    glDeleteVertexArrays(3, VAO);
+    glDeleteBuffers(3, VBO);
+    glDeleteBuffers(3, instanceVBO);
 
     /* Terminate glfw */
     glfwTerminate();
@@ -468,4 +516,89 @@ Image generate_texture(int height, int width)
     image.data = data;
 
     return image;
+}
+
+/*
+ * Requires:
+ *      VAOs, VBOs, and instanceVBOs must be properly initialized arrays
+ * 
+ * Effects:
+ *      Binds the given VAOs and VBOs
+ */
+void bindArrays(unsigned int *VAOs, unsigned int *VBOs, unsigned int *instanceVBOs) {
+
+    /* Binding VAO used for the ground */
+    glBindVertexArray(VAOs[0]);
+
+    /* Configuring vertex and indice data */
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[0]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(groundVertices), groundVertices, GL_STATIC_DRAW);
+
+    /* Getting position vectors */
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+
+    /* Getting texture vectors */
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    
+    /* Getting normal vectors */
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(5 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    
+    /* Configuring instancing data */
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBOs[0]);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribDivisor(3, 1);
+    glEnableVertexAttribArray(3);
+    
+    /* Binding VAO used for the x axis walls*/
+    glBindVertexArray(VAOs[1]);
+
+    /* Configuring vertex and indice data */
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[1]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(wallXVertices), wallXVertices, GL_STATIC_DRAW);
+
+    /* Getting position vectors */
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+
+    /* Getting texture vectors */
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    
+    /* Getting normal vectors */
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(5 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    
+    /* Configuring instancing data */
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBOs[1]);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribDivisor(3, 1);
+    glEnableVertexAttribArray(3);
+
+    /* Binding VAO used for the z axis walls */
+    glBindVertexArray(VAOs[2]);
+
+    /* Configuring vertex and indice data */
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[2]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(wallZVertices), wallZVertices, GL_STATIC_DRAW);
+
+    /* Getting position vectors */
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+
+    /* Getting texture vectors */
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    
+    /* Getting normal vectors */
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(5 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    
+    /* Configuring instancing data */
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBOs[2]);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribDivisor(3, 1);
+    glEnableVertexAttribArray(3);
 }
